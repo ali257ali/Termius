@@ -1,0 +1,39 @@
+name: Run Temporary VPS with V2Ray
+
+on:
+  workflow_dispatch:
+
+jobs:
+  vps:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y docker.io curl
+
+    - name: Setup SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PUB_KEY }}" > ~/.ssh/authorized_keys
+        chmod 600 ~/.ssh/authorized_keys
+
+    - name: Run V2Ray container
+      run: |
+        docker pull v2fly/v2ray-core
+        docker run -d --name v2ray \
+          -p 1080:1080 \
+          -p 443:443 \
+          v2fly/v2ray-core \
+          /usr/bin/v2ray run -config /etc/v2ray/config.json
+
+    - name: Show connection info
+      run: |
+        echo "SSH Host: ${{ runner.ip }} (temporary)"
+        echo "SSH User: runner"
+        echo "SSH Key: use the private key from Termux"
+        echo "V2Ray Ports: 1080 (Socks), 443 (TLS)"
