@@ -1,50 +1,34 @@
-name: Temporary V2Ray VPS
+name: Temporary VPS SSH
 
 on:
   workflow_dispatch:
 
 jobs:
-  run-v2ray:
-    runs-on: ubuntu-22.04
+  setup-vps:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - name: Generate SSH Key
+        run: |
+          ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -C "github-actions@vps"
+          echo "Public key:"
+          cat ~/.ssh/id_ed25519.pub
 
-      - name: Install dependencies
+      - name: Install SSH server
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl unzip
+          sudo apt-get install -y openssh-server
+          sudo mkdir -p /var/run/sshd
+          sudo echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+          sudo service ssh start
 
-      - name: Install V2Ray
+      - name: Add generated key to authorized_keys
         run: |
-          bash <(curl -L https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh)
+          mkdir -p ~/.ssh
+          cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
+          chmod 600 ~/.ssh/authorized_keys
+          chmod 700 ~/.ssh
 
-      - name: Setup default config
+      - name: Show connection info
         run: |
-          sudo tee /usr/local/etc/v2ray/config.json > /dev/null <<EOF
-          {
-            "inbounds": [
-              {
-                "port": 1080,
-                "listen": "0.0.0.0",
-                "protocol": "socks",
-                "settings": {
-                  "auth": "noauth",
-                  "udp": true
-                }
-              }
-            ],
-            "outbounds": [
-              {
-                "protocol": "freedom",
-                "settings": {}
-              }
-            ]
-          }
-          EOF
-
-      - name: Run V2Ray
-        run: |
-          sudo systemctl stop v2ray || true
-          sudo /usr/local/bin/v2ray -config /usr/local/etc/v2ray/config.json &
-          echo "V2Ray is running on port 1080"
+          echo "Connect using:"
+          echo "ssh -i ~/.ssh/id_ed25519 root@$(curl -s ifconfig.me)"
