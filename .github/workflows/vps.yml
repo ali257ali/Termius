@@ -1,39 +1,50 @@
-name: Run Temporary VPS with V2Ray
+name: Temporary V2Ray VPS
 
 on:
   workflow_dispatch:
 
 jobs:
-  vps:
-    runs-on: ubuntu-latest
-
+  run-v2ray:
+    runs-on: ubuntu-22.04
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y docker.io curl
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl unzip
 
-    - name: Setup SSH
-      run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.SSH_PUB_KEY }}" > ~/.ssh/authorized_keys
-        chmod 600 ~/.ssh/authorized_keys
+      - name: Install V2Ray
+        run: |
+          bash <(curl -L https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh)
 
-    - name: Run V2Ray container
-      run: |
-        docker pull v2fly/v2ray-core
-        docker run -d --name v2ray \
-          -p 1080:1080 \
-          -p 443:443 \
-          v2fly/v2ray-core \
-          /usr/bin/v2ray run -config /etc/v2ray/config.json
+      - name: Setup default config
+        run: |
+          sudo tee /usr/local/etc/v2ray/config.json > /dev/null <<EOF
+          {
+            "inbounds": [
+              {
+                "port": 1080,
+                "listen": "0.0.0.0",
+                "protocol": "socks",
+                "settings": {
+                  "auth": "noauth",
+                  "udp": true
+                }
+              }
+            ],
+            "outbounds": [
+              {
+                "protocol": "freedom",
+                "settings": {}
+              }
+            ]
+          }
+          EOF
 
-    - name: Show connection info
-      run: |
-        echo "SSH Host: ${{ runner.ip }} (temporary)"
-        echo "SSH User: runner"
-        echo "SSH Key: use the private key from Termux"
-        echo "V2Ray Ports: 1080 (Socks), 443 (TLS)"
+      - name: Run V2Ray
+        run: |
+          sudo systemctl stop v2ray || true
+          sudo /usr/local/bin/v2ray -config /usr/local/etc/v2ray/config.json &
+          echo "V2Ray is running on port 1080"
